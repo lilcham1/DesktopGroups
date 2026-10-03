@@ -4,7 +4,7 @@ namespace DesktopGroups;
 
 /// <summary>
 /// Owns the on-disk layout and every operation on it:
-/// contents in %AppData%\DesktopGroups\&lt;group&gt;\, generated icons in &lt;app folder&gt;\Icons\&lt;group&gt;\,
+/// contents in %AppData%\DesktopGroups\&lt;group&gt;\, generated icons in %LocalAppData%\DesktopGroups\Icons\&lt;group&gt;\,
 /// and the group's shortcut on the user's desktop.
 /// </summary>
 static class GroupStore
@@ -12,8 +12,8 @@ static class GroupStore
     public static readonly string Root =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DesktopGroups");
 
-    // Not under AppData: on this machine Explorer's desktop shows a blank icon for new icon files anywhere under AppData.
-    static readonly string IconsRoot = Path.Combine(AppContext.BaseDirectory, "Icons");
+    static readonly string IconsRoot =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopGroups", "Icons");
 
     static readonly string Desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
 

@@ -21,7 +21,7 @@ iPhone-style folders for the Windows desktop. A group is a normal desktop icon w
 
 1. Install the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64) if you don't have it.
 2. Download `DesktopGroups-1.0.0-win-x64.zip` from [Releases](https://github.com/lilcham1/DesktopGroups/releases/latest).
-3. Unzip it to a folder **outside** `AppData`, for example `C:\Apps\DesktopGroups`. On some PCs, Explorer won't show icons stored under `AppData`.
+3. Unzip it to a folder of your choice, for example `%LocalAppData%\Programs\DesktopGroups`.
 4. Run `DesktopGroups.exe`.
 
 Running it again while it's already running opens the **New group** dialog.
@@ -35,7 +35,7 @@ Running it again while it's already running opens the **New group** dialog.
 - **Delete a group:** in Settings or the right-click menu. Its items go back to your desktop first.
 - **Start with Windows** and **Quit** are in the panel's right-click menu.
 
-Group contents live in `%AppData%\DesktopGroups\<group>\`, and styles in `%AppData%\DesktopGroups\groups.json`.
+Group contents live in `%AppData%\DesktopGroups\<group>\`, styles in `%AppData%\DesktopGroups\groups.json`, and generated tile icons in `%LocalAppData%\DesktopGroups\Icons`.
 
 ## Build from source
 

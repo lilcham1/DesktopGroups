@@ -3,8 +3,6 @@
 #   2. starts it with Windows (HKCU Run key; same setting as the panel's "Start with Windows")
 #   3. starts it. On startup the app adds "Desktop group" to the desktop's New menu
 #      and points every group shortcut at this copy.
-#
-# The install folder must not be under AppData: on some machines Explorer won't show icons stored there.
 
 param([string]$InstallDir = "F:\Apps\DesktopGroups")
 
