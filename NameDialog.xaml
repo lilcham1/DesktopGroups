@@ -1,0 +1,15 @@
+<Window x:Class="DesktopGroups.NameDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New group" SizeToContent="WidthAndHeight" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" Topmost="True" ShowInTaskbar="False">
+    <StackPanel Margin="20" Width="300">
+        <TextBlock Text="Group name" Margin="0,0,0,6" />
+        <TextBox x:Name="NameBox" Padding="4" />
+        <TextBlock x:Name="Problem" Foreground="#C42B1C" Margin="0,6,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Create" IsDefault="True" MinWidth="80" Click="Create_Click" />
+            <Button Content="Cancel" IsCancel="True" MinWidth="80" Margin="8,0,0,0" />
+        </StackPanel>
+    </StackPanel>
+</Window>
