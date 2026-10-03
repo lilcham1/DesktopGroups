@@ -17,6 +17,8 @@ static class NativeMethods
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    public const uint WDA_NONE = 0x0;
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
 
     public const int WH_MOUSE_LL = 14;
     public const int WM_LBUTTONDOWN = 0x0201;
@@ -170,6 +172,12 @@ static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromRect(ref RECT rect, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+
+    [DllImport("dwmapi.dll", PreserveSig = false)]
+    public static extern void DwmFlush();
 
     [DllImport("dwmapi.dll", PreserveSig = false)]
     public static extern void DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);

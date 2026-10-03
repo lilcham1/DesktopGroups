@@ -38,7 +38,7 @@ public partial class GroupPanel : Window
     bool _droppedOnPanel;   // ...and the drag it started was dropped onto this panel
     Point? _dragStart;      // where a press on an item began, until it becomes a drag or ends
 
-    GroupPanel(string group, RECT icon, MONITORINFO monitor, BitmapSource backdrop)
+    GroupPanel(string group, RECT icon, MONITORINFO monitor, BitmapSource? backdrop)
     {
         var folder = GroupStore.FolderFor(group);
         if (!Directory.Exists(folder))
@@ -51,7 +51,7 @@ public partial class GroupPanel : Window
         _monitor = monitor.rcMonitor;
         _workArea = monitor.rcWork;
         GroupName.Text = group;
-        Backdrop.Source = backdrop;
+        Backdrop.Source = backdrop; // null unless the group is Frosted glass
         var startWithWindows = new MenuItem { Header = "Start with Windows", IsCheckable = true };
         startWithWindows.Click += (_, _) => AutoStart.Set(startWithWindows.IsChecked);
         Panel.ContextMenu = new ContextMenu
@@ -109,6 +109,7 @@ public partial class GroupPanel : Window
         Closing += (_, _) => _closing = true;
         Closed += (_, _) =>
         {
+            Dispatcher.InvokeAsync(ReleaseMemory, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             _mouse.Dispose();
             _open = _open == this ? null : _open;
         };
@@ -139,7 +140,9 @@ public partial class GroupPanel : Window
         if (!GetMonitorInfo(MonitorFromRect(ref icon, MONITOR_DEFAULTTONEAREST), ref monitor))
             throw new Win32Exception();
 
-        _open = new GroupPanel(group, icon, monitor, ScreenSnapshot.BlurredMonitor(monitor.rcMonitor));
+        // Only frosted glass needs the snapshot; take it before the panel exists so the panel isn't in it.
+        var backdrop = GroupStyles.Get(group).Theme == Theme.Frosted ? ScreenSnapshot.BlurredMonitor(monitor.rcMonitor) : null;
+        _open = new GroupPanel(group, icon, monitor, backdrop);
         _open.Show();
         _open.Activate();
     }
@@ -205,6 +208,13 @@ public partial class GroupPanel : Window
     /// <summary>Applies and saves a new style; the open panel and the desktop tile update immediately.</summary>
     public void ChangeStyle(GroupStyle style)
     {
+        // Switched to frosted glass while open: snapshot the screen now, leaving this app's windows out of it.
+        if (style.Theme == Theme.Frosted && Backdrop.Source == null)
+        {
+            var ourWindows = Application.Current.Windows.Cast<Window>().Select(window => new WindowInteropHelper(window).Handle).ToArray();
+            Backdrop.Source = ScreenSnapshot.BlurredMonitor(_monitor, ourWindows);
+        }
+
         _style = style;
         GroupStyles.Set(_group, style);
         ApplyStyle();
@@ -277,6 +287,18 @@ public partial class GroupPanel : Window
         var item = new MenuItem { Header = header };
         item.Click += (_, _) => action();
         return item;
+    }
+
+    /// <summary>
+    /// A panel open leaves screen-sized bitmaps and icon images behind. Collect them (compacting the large-object heap,
+    /// where bitmaps live) once the panel is gone, so the app idles small instead of waiting for the GC to get to it.
+    /// </summary>
+    static void ReleaseMemory()
+    {
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
     }
 
     /// <summary>Opens the settings window beside the panel; the panel stays open behind it as a live preview.</summary>

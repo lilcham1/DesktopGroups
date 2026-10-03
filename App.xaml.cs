@@ -21,6 +21,8 @@ public partial class App : Application
             return;
         }
 
+        // The only UI is one small, short-lived panel: drawing it on the CPU avoids loading the GPU driver into the process.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         NewMenu.Register(); // re-pointed at this copy on every start, like the group shortcuts below
         Directory.CreateDirectory(GroupStore.Root);
         GroupStyles.Load();

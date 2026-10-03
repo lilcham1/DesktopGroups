@@ -11,6 +11,7 @@ static class PanelEffects
 {
     const int PetalCount = 14;
     const int SparkleCount = 16;
+    const int FrameRate = 30;
 
     static readonly Geometry Star = Geometry.Parse("M5,0 L6,4 L10,5 L6,6 L5,10 L4,6 L0,5 L4,4 Z");
 
@@ -87,11 +88,15 @@ static class PanelEffects
         return sparkle;
     }
 
-    /// <summary>Repeats forever, already <paramref name="offsetSeconds"/> into its cycle.</summary>
+    /// <summary>
+    /// Repeats forever, already <paramref name="offsetSeconds"/> into its cycle, at <see cref="FrameRate"/>:
+    /// every frame redraws the whole see-through panel, and drifting petals look the same at half of WPF's default 60.
+    /// </summary>
     static DoubleAnimation Forever(DoubleAnimation animation, double offsetSeconds)
     {
         animation.RepeatBehavior = RepeatBehavior.Forever;
         animation.BeginTime = TimeSpan.FromSeconds(-offsetSeconds);
+        Timeline.SetDesiredFrameRate(animation, FrameRate);
         return animation;
     }
 
