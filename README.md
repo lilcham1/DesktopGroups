@@ -20,7 +20,7 @@ iPhone-style folders for the Windows desktop. A group is a normal desktop icon w
 ## Install
 
 1. Install the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64) if you don't have it.
-2. Download `DesktopGroups-1.0.0-win-x64.zip` from [Releases](https://github.com/lilcham1/DesktopGroups/releases/latest).
+2. Download the `DesktopGroups-<version>-win-x64.zip` file from the [latest release](https://github.com/lilcham1/DesktopGroups/releases/latest).
 3. Unzip it to a folder of your choice, for example `%LocalAppData%\Programs\DesktopGroups`.
 4. Run `DesktopGroups.exe`.
 
