@@ -29,7 +29,6 @@ public partial class GroupPanel : Window
     readonly RECT _icon;
     readonly RECT _monitor;
     readonly RECT _workArea;
-    readonly GlobalMouse _mouse = new();
     string _group;
     GroupStyle _style;
     bool _closing;
@@ -45,6 +44,7 @@ public partial class GroupPanel : Window
             throw new DirectoryNotFoundException($"Group folder not found: {folder}");
 
         InitializeComponent();
+        var mouse = new GlobalMouse();
         _group = group;
         _style = GroupStyles.Get(group);
         _icon = icon;
@@ -91,14 +91,14 @@ public partial class GroupPanel : Window
             };
             LocationChanged += (_, _) => UpdateBackdrop();
         };
-        _mouse.Pressed += point =>
+        mouse.Pressed += point =>
         {
             if (IsOurWindow(point))
                 return;
             _pressedOutside = true;
             _droppedOnPanel = false;
         };
-        _mouse.Released += _ =>
+        mouse.Released += _ =>
         {
             if (!_pressedOutside)
                 return;
@@ -110,7 +110,7 @@ public partial class GroupPanel : Window
         Closed += (_, _) =>
         {
             Dispatcher.InvokeAsync(ReleaseMemory, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-            _mouse.Dispose();
+            mouse.Dispose();
             _open = _open == this ? null : _open;
         };
         // A click outside is handled on release (it may be the start of a drag onto the panel); this covers Alt+Tab and the Windows key.
@@ -124,6 +124,15 @@ public partial class GroupPanel : Window
             if (args.Key == Key.Escape)
                 CloseOnce();
         };
+    }
+
+    /// <summary>Warm-up only (see <see cref="Warm"/>): the window with the default style and no group.</summary>
+    GroupPanel()
+    {
+        InitializeComponent();
+        _group = "";
+        _style = new GroupStyle();
+        ApplyStyle();
     }
 
     public string Group => _group;
@@ -145,6 +154,33 @@ public partial class GroupPanel : Window
         _open = new GroupPanel(group, icon, monitor, backdrop);
         _open.Show();
         _open.Activate();
+    }
+
+    /// <summary>
+    /// Once the app is idle after startup: shows and closes one panel off-screen, so the first real open doesn't pay for
+    /// loading the XAML, creating the window, and starting the renderer. Then fills the icon cache for every group at the
+    /// size its panel will ask for.
+    /// </summary>
+    public static void Warm()
+    {
+        var panel = new GroupPanel { ShowActivated = false };
+        panel.Show();
+        var scale = VisualTreeHelper.GetDpi(panel).DpiScaleX;
+        panel.Close();
+
+        foreach (var group in GroupStore.Groups())
+        {
+            var folder = GroupStore.FolderFor(group);
+            var pixels = (int)Math.Round(GroupStyles.Get(group).IconPixels * scale);
+            GroupPublisher.Queue(() => GroupItem.LoadAll(folder, pixels));
+        }
+    }
+
+    /// <summary>The open panel reloads when its group's folder changes: files dropped on the desktop icon, or changed elsewhere.</summary>
+    public static void ContentsChanged(string group)
+    {
+        if (_open is { _closing: false } panel && string.Equals(panel._group, group, StringComparison.OrdinalIgnoreCase))
+            panel.LoadItems();
     }
 
     void CloseOnce()
@@ -215,15 +251,17 @@ public partial class GroupPanel : Window
             Backdrop.Source = ScreenSnapshot.BlurredMonitor(_monitor, ourWindows);
         }
 
+        var iconSizeChanged = style.IconSize != _style.IconSize;
         _style = style;
         GroupStyles.Set(_group, style);
         ApplyStyle();
-        LoadItems();
+        if (iconSizeChanged)
+            LoadItems(); // other changes reuse the items; templates and colors update through ApplyStyle
         UpdateLayout();
         PlaceBesideIcon(); // a new placement doesn't change the size, so SizeChanged won't do it
         UpdateBackdrop();
         UpdateEffect();
-        GroupStore.Publish(_group);
+        GroupPublisher.Request(_group); // the desktop tile follows, off the UI thread
     }
 
     /// <summary>
@@ -337,8 +375,20 @@ public partial class GroupPanel : Window
 
         _dragStart = null;
         var item = (GroupItem)((FrameworkElement)sender).DataContext;
-        Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
         CloseOnce();
+        Launch(item.Path);
+    }
+
+    /// <summary>
+    /// Starts an item off the UI thread: some Shell launches take a while to return. A failure is rethrown on the UI thread,
+    /// where the app reports crashes.
+    /// </summary>
+    static void Launch(string path)
+    {
+        var ui = Application.Current.Dispatcher;
+        Task.Run(() => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })).ContinueWith(
+            launch => ui.InvokeAsync(System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(launch.Exception!.InnerException!).Throw),
+            TaskContinuationOptions.OnlyOnFaulted);
     }
 
     /// <summary>

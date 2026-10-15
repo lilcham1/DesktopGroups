@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.IO;
 using System.IO.Pipes;
-using System.Text.Json;
 using static DesktopGroups.NativeMethods;
 
 namespace DesktopGroups;
@@ -9,12 +8,14 @@ namespace DesktopGroups;
 /// <summary>
 /// One running instance per user session. Later launches (double-clicking a group shortcut, dropping files on it)
 /// hand their command-line arguments to the running instance over a named pipe and exit.
+/// Arguments travel joined by '\0', which can't appear in a path or group name.
 /// </summary>
 static class SingleInstance
 {
     const string MutexName = @"Local\DesktopGroups.Instance";
     const string PipeName = "DesktopGroups.Commands";
     const int ConnectTimeoutMs = 5000;
+    const char Separator = '\0';
 
     static Mutex? _mutex;
 
@@ -34,7 +35,7 @@ static class SingleInstance
             throw new Win32Exception();
 
         using var writer = new StreamWriter(pipe);
-        writer.Write(JsonSerializer.Serialize(args));
+        writer.Write(string.Join(Separator, args));
     }
 
     /// <summary>Receives commands on a background thread and passes each one to <paramref name="onCommand"/>.</summary>
@@ -47,9 +48,10 @@ static class SingleInstance
                 using var pipe = new NamedPipeServerStream(PipeName, PipeDirection.In, 1);
                 pipe.WaitForConnection();
                 using var reader = new StreamReader(pipe);
-                var args = JsonSerializer.Deserialize<string[]>(reader.ReadToEnd())
-                    ?? throw new InvalidDataException("Empty command from another DesktopGroups launch.");
-                onCommand(args);
+                var text = reader.ReadToEnd();
+                if (text.Length == 0)
+                    throw new InvalidDataException("Empty command from another DesktopGroups launch.");
+                onCommand(text.Split(Separator));
             }
         })
         {

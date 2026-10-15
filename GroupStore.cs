@@ -49,25 +49,28 @@ static class GroupStore
     public static void Create(string group)
     {
         Directory.CreateDirectory(FolderFor(group));
-        Publish(group);
+        GroupPublisher.Invoke(() => Publish(group));
     }
 
-    /// <summary>Renames the folder and the desktop shortcut in place, so the shortcut keeps its spot on the desktop.</summary>
-    public static void Rename(string group, string newName)
+    /// <summary>
+    /// Renames the folder and the desktop shortcut in place, so the shortcut keeps its spot on the desktop.
+    /// The old tile icons are removed only after the shortcut points at the new ones, so it never shows a blank icon.
+    /// </summary>
+    public static void Rename(string group, string newName) => GroupPublisher.Invoke(() =>
     {
         Directory.Move(FolderFor(group), FolderFor(newName));
         File.Move(ShortcutFor(group), ShortcutFor(newName));
-        Directory.Delete(IconFolderFor(group), recursive: true);
         GroupStyles.Rename(group, newName);
         Publish(newName);
-    }
+        Directory.Delete(IconFolderFor(group), recursive: true);
+    });
 
     /// <summary>Names of the group's entries that already exist on the desktop and would block <see cref="Delete"/>.</summary>
     public static List<string> DesktopConflicts(string group) =>
         Entries(FolderFor(group)).Select(entry => entry.Name).Where(name => Path.Exists(Path.Combine(Desktop, name))).ToList();
 
     /// <summary>Moves every entry back to the desktop, then removes the group's folder, icons, and shortcut.</summary>
-    public static void Delete(string group)
+    public static void Delete(string group) => GroupPublisher.Invoke(() =>
     {
         foreach (var entry in Entries(FolderFor(group)))
         {
@@ -82,7 +85,7 @@ static class GroupStore
         Directory.Delete(IconFolderFor(group), recursive: true);
         File.Delete(ShortcutFor(group));
         GroupStyles.Remove(group);
-    }
+    });
 
     /// <summary>Why <paramref name="paths"/> can't be moved into <paramref name="group"/>, or null if they can.</summary>
     public static string? MoveInProblem(string group, IEnumerable<string> paths)
@@ -123,6 +126,6 @@ static class GroupStore
         }
     }
 
-    /// <summary>Regenerates the group's tile icon and points its desktop shortcut at it.</summary>
+    /// <summary>Regenerates the group's tile icon and points its desktop shortcut at it. Runs on the <see cref="GroupPublisher"/> thread.</summary>
     public static void Publish(string group) => DesktopShortcut.Write(group, GroupIcon.Write(group));
 }

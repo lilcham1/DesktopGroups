@@ -7,7 +7,7 @@ namespace DesktopGroups;
 
 /// <summary>
 /// Each group's <see cref="GroupStyle"/>, persisted in %AppData%\DesktopGroups\groups.json, plus the background images styles use.
-/// Groups never styled use the default style.
+/// Groups never styled use the default style. Locked: the UI changes styles while the publisher thread reads them.
 /// </summary>
 static class GroupStyles
 {
@@ -16,6 +16,7 @@ static class GroupStyles
     static readonly string FilePath = Path.Combine(GroupStore.Root, "groups.json");
     static readonly JsonSerializerOptions Options = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
 
+    static readonly object Gate = new();
     static Dictionary<string, GroupStyle> _styles = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Reads groups.json. A missing file means nothing has been styled yet; a malformed one throws.</summary>
@@ -25,27 +26,41 @@ static class GroupStyles
             return;
         var loaded = JsonSerializer.Deserialize<Dictionary<string, GroupStyle>>(File.ReadAllText(FilePath), Options)
             ?? throw new InvalidDataException($"{FilePath} contains null.");
-        _styles = new Dictionary<string, GroupStyle>(loaded, StringComparer.OrdinalIgnoreCase);
+        lock (Gate)
+            _styles = new Dictionary<string, GroupStyle>(loaded, StringComparer.OrdinalIgnoreCase);
     }
 
-    public static GroupStyle Get(string group) => _styles.GetValueOrDefault(group) ?? new GroupStyle();
+    public static GroupStyle Get(string group)
+    {
+        lock (Gate)
+            return _styles.GetValueOrDefault(group) ?? new GroupStyle();
+    }
 
     public static void Set(string group, GroupStyle style)
     {
-        _styles[group] = style;
-        Save();
+        lock (Gate)
+        {
+            _styles[group] = style;
+            Save();
+        }
     }
 
     public static void Rename(string group, string newName)
     {
-        if (_styles.Remove(group, out var style))
-            Set(newName, style);
+        lock (Gate)
+        {
+            if (_styles.Remove(group, out var style))
+                Set(newName, style);
+        }
     }
 
     public static void Remove(string group)
     {
-        if (_styles.Remove(group))
-            Save();
+        lock (Gate)
+        {
+            if (_styles.Remove(group))
+                Save();
+        }
     }
 
     /// <summary>
@@ -62,7 +77,7 @@ static class GroupStyles
         return name;
     }
 
-    /// <summary>Writes groups.json and deletes imported images no style uses anymore.</summary>
+    /// <summary>Writes groups.json and deletes imported images no style uses anymore. Called with <see cref="Gate"/> held.</summary>
     static void Save()
     {
         File.WriteAllText(FilePath, JsonSerializer.Serialize(_styles, Options));

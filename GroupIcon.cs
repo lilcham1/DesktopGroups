@@ -22,26 +22,34 @@ static class GroupIcon
     /// <summary>
     /// Returns the path of the icon for the group's current contents and style, writing it if needed.
     /// The file name is a fingerprint of both, so a changed group gets a new path and Explorer cannot show a cached old icon.
+    /// The fingerprint needs only file names, times, and the style, so an unchanged group costs no icon loading or rendering.
     /// </summary>
     public static string Write(string group)
     {
-        var items = GroupItem.LoadAll(GroupStore.FolderFor(group), Cell).Take(MaxIcons).ToList();
+        var contents = GroupStore.FolderFor(group);
         var style = GroupStyles.Get(group);
         var folder = GroupStore.IconFolderFor(group);
-        var path = Path.Combine(folder, Fingerprint(items, style) + ".ico");
+        var path = Path.Combine(folder, Fingerprint(contents, style) + ".ico");
 
         Directory.CreateDirectory(folder);
         if (!File.Exists(path))
+        {
+            var items = GroupItem.LoadAll(contents, Cell).Take(MaxIcons).ToList();
             File.WriteAllBytes(path, ToIco(Render(style, dc => DrawItems(dc, items))));
+        }
 
         foreach (var stale in Directory.EnumerateFiles(folder).Where(file => file != path))
             File.Delete(stale);
         return path;
     }
 
-    static string Fingerprint(List<GroupItem> items, GroupStyle style)
+    /// <summary>Every entry's path and last write time (a retargeted shortcut changes the tile too), plus the style.</summary>
+    static string Fingerprint(string contents, GroupStyle style)
     {
-        var text = string.Join("\n", items.Select(item => item.Path)) + "\n" + style;
+        var entries = GroupStore.Entries(contents)
+            .Select(entry => entry.FullName + "|" + entry.LastWriteTimeUtc.Ticks)
+            .Order(StringComparer.OrdinalIgnoreCase);
+        var text = string.Join("\n", entries) + "\n" + style;
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)), 0, 6);
     }
 

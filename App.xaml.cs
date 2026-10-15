@@ -13,21 +13,14 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) =>
             MessageBox.Show(args.Exception.ToString(), "DesktopGroups crashed", MessageBoxButton.OK, MessageBoxImage.Error);
 
-        if (!SingleInstance.TryClaim())
-        {
-            // Launching the app again while it runs (it has no window or tray icon) means "make a new group".
-            SingleInstance.SendToPrimary(e.Args.Length == 0 ? ["--new-group"] : e.Args);
-            Shutdown();
-            return;
-        }
-
         // The only UI is one small, short-lived panel: drawing it on the CPU avoids loading the GPU driver into the process.
         System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         NewMenu.Register(); // re-pointed at this copy on every start, like the group shortcuts below
         Directory.CreateDirectory(GroupStore.Root);
         GroupStyles.Load();
+        // Tiles are checked and, if needed, redrawn on the publisher thread; startup doesn't wait for them.
         foreach (var group in GroupStore.Groups())
-            GroupStore.Publish(group);
+            GroupPublisher.Request(group);
 
         _watcher = new FileSystemWatcher(GroupStore.Root)
         {
@@ -41,6 +34,10 @@ public partial class App : Application
 
         SingleInstance.Listen(args => Dispatcher.InvokeAsync(() => HandleCommand(args)));
         HandleCommand(e.Args);
+
+        // Once idle: warm up what the first panel open would otherwise pay for (panel XAML and window, item icons, UI Automation).
+        Dispatcher.InvokeAsync(GroupPanel.Warm, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        GroupPublisher.Queue(DesktopIcons.Warm);
     }
 
     /// <summary>
@@ -84,20 +81,17 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Changes inside a group folder republish that group. Top-level changes (whole groups) are handled by the actions that make them.
-    /// Events still queued for a group that has since been deleted or renamed are dropped: there is nothing left to publish.
+    /// Changes inside a group folder redraw that group's tile (coalesced by the publisher) and refresh its panel if it's open.
+    /// Top-level changes (whole groups) are handled by the actions that make them.
     /// </summary>
-    void OnGroupContentChanged(string fullPath)
+    static void OnGroupContentChanged(string fullPath)
     {
         var segments = Path.GetRelativePath(GroupStore.Root, fullPath).Split(Path.DirectorySeparatorChar);
         if (segments.Length < 2)
             return;
 
         var group = segments[0];
-        Dispatcher.InvokeAsync(() =>
-        {
-            if (Directory.Exists(GroupStore.FolderFor(group)))
-                GroupStore.Publish(group);
-        });
+        GroupPublisher.Request(group);
+        Current.Dispatcher.InvokeAsync(() => GroupPanel.ContentsChanged(group));
     }
 }

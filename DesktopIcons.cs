@@ -9,17 +9,27 @@ static class DesktopIcons
     /// <summary>Screen rectangle (physical pixels) of the desktop icon labelled <paramref name="name"/>.</summary>
     public static RECT BoundsOf(string name)
     {
-        var defView = FindWindowEx(FindWindow("Progman", null), IntPtr.Zero, "SHELLDLL_DefView", null);
-        var listView = FindWindowEx(defView, IntPtr.Zero, "SysListView32", null);
-        if (listView == IntPtr.Zero)
-            throw new InvalidOperationException("The desktop icon list (Progman > SHELLDLL_DefView > SysListView32) was not found.");
-
-        var icon = AutomationElement.FromHandle(listView).FindFirst(TreeScope.Children, new AndCondition(
+        var icon = AutomationElement.FromHandle(ListView()).FindFirst(TreeScope.Children, new AndCondition(
                 new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
                 new PropertyCondition(AutomationElement.NameProperty, name)))
             ?? throw new InvalidOperationException($"The desktop has no icon named \"{name}\".");
 
         var bounds = icon.Current.BoundingRectangle;
         return new RECT { Left = (int)bounds.Left, Top = (int)bounds.Top, Right = (int)bounds.Right, Bottom = (int)bounds.Bottom };
+    }
+
+    /// <summary>
+    /// Makes one UI Automation call against the desktop, so the first panel opened after startup
+    /// doesn't pay for UI Automation's start-up.
+    /// </summary>
+    public static void Warm() => _ = AutomationElement.FromHandle(ListView()).Current.ClassName;
+
+    static IntPtr ListView()
+    {
+        var defView = FindWindowEx(FindWindow("Progman", null), IntPtr.Zero, "SHELLDLL_DefView", null);
+        var listView = FindWindowEx(defView, IntPtr.Zero, "SysListView32", null);
+        if (listView == IntPtr.Zero)
+            throw new InvalidOperationException("The desktop icon list (Progman > SHELLDLL_DefView > SysListView32) was not found.");
+        return listView;
     }
 }
